@@ -59,7 +59,7 @@ if download:
         fil.write(resp.content)
 
 
-# Find the name of the package after install
+# Find the RPM package name
 package_name = subprocess.run(
     'rpm -qp --queryformat "%{NAME}" ' + str(path),
     shell=True,
@@ -79,6 +79,7 @@ installed_versions = cmd_result.stdout.splitlines()
 install = True
 if len(installed_versions) == 1:
     installed_version = installed_versions[0]
+    print(f"{package_name} {installed_version} already installed")
     rpm_version = subprocess.run(
         'rpm -qp --queryformat "%{VERSION}" ' + str(path),
         shell=True,
