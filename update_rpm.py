@@ -36,7 +36,14 @@ presets = {
         "endpoint": "url",
         "url": "https://azuredatastudio-update.azurewebsites.net/latest/linux-rpm-x64/stable",
     },
+    # UNTESTED
+    "azure-cli": {
+        "endpoint": "url",
+        "url": "https://aka.ms/InstallAzureCliRpmEl8Edge",
+    },
 }
+
+# TODO endpoint type can probably be auto detected
 
 
 parser = argparse.ArgumentParser(
@@ -45,14 +52,11 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 subparsers = parser.add_subparsers(
-    "endpoint",
     help="The type of endpoint you want to install from. Or choose from a given preset.",
-    type=str,
-    choices=endpoints + ["preset"],
     dest="endpoint",
 )
 
-url_parser_help = "RPM direct download URL"
+url_parser_help = "RPM direct download URL. The url can be a redirect."
 url_parser = subparsers.add_parser("url", help=url_parser_help)
 url_parser.add_argument("url", help=url_parser_help, type=str)
 
@@ -61,6 +65,13 @@ github_parser = subparsers.add_parser("github", help=github_parser_help)
 github_parser.add_argument(
     "repo",
     help="{owner}/{repository} Owner and repository name. Example: 'lapce/lapce'",
+    type=str,
+)
+github_parser.add_argument(
+    "-s",
+    "--file_selector",
+    help="File Selector. The first file name that contains the given string will be chosen. Example: 'x86_64.rpm'",
+    default=".rpm",
     type=str,
 )
 
@@ -124,14 +135,15 @@ if endpoint == "github":
     js = resp.json()
     version = js["tag_name"][1:]
     try:
-        release = next(x for x in js["assets"] if file_selector in x["name"])
+        release = next(
+            x for x in js["assets"] if file_selector.lower() in x["name"].lower()
+        )
     except StopIteration:
         names = "\n".join([x["name"] for x in js["assets"]])
         print(f"{file_selector=} not found. Available options:\n{names}")
         sys.exit(1)
     url = release["browser_download_url"]
     fname = release["name"]
-
 elif endpoint == "json":
     json_url = args.json_url
 
@@ -159,6 +171,9 @@ else:
 # If the package is already installed, we might break out of the program early to avoid downloading the file again.
 try:
     inferred_package_name = rpm.package(fname).name
+    # TODO get real package name and version by downloading only first 1kB
+    # $ curl -s -L -r 0-1024 -o /tmp/foo.rpm https://azuredatastudio-update.azurewebsites.net/latest/linux-rpm-x64/stable; file /tmp/foo.rpm
+    # /tmp/foo.rpm: RPM v3.0 bin i386/x86_64 azuredatastudio-1.49.1-1723572669.el7
 except IndexError:
     # Could not infer package name
     pass
@@ -174,9 +189,7 @@ else:
         installed_version = installed_versions[0]
         if not installed_version.endswith(
             "not installed"
-        ) and not installed_version.endswith(
-            "NO KEY"
-        ):  # xx
+        ) and not installed_version.endswith("NO KEY"):
             version_cmp = rpm.compare_packages(fname, installed_version)
             if version_cmp < 0:
                 print(
