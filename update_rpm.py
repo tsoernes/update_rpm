@@ -4,6 +4,7 @@ Script to install or update an RPM package from a link
 """
 
 import argparse
+import re
 import shlex
 import subprocess
 import sys
@@ -12,11 +13,12 @@ from pathlib import Path
 from pprint import pprint
 
 import requests
+from bs4 import BeautifulSoup
 from jsonpath_ng.ext import parse
 from packaging.version import Version
 from version_utils import rpm
 
-endpoints = ["url", "json", "github"]
+endpoints = ["url", "json", "github", "html"]
 
 presets = {
     "plex": {
@@ -33,6 +35,10 @@ presets = {
         "endpoint": "github",
         "repo": "Alex313031/thorium",
         "file_selector": "AVX2.rpm",
+    },
+    "microsoft-repo": {
+        "endpoint": "url",
+        "url": "https://packages.microsoft.com/config/fedora/40/packages-microsoft-prod.rpm",
     },
     "azuredatastudio": {
         "endpoint": "url",
@@ -51,8 +57,14 @@ presets = {
         "url": "https://update.code.visualstudio.com/latest/linux-rpm-x64/stable",
     },
     "docker": {
-        "endpoint": "url",
-        "url": "https://download.docker.com/linux/fedora/docker-ce.repo",
+        "endpoint": "html",
+        "url": "https://download.docker.com/linux/fedora/41/x86_64/stable/Packages/",
+        "regex_selector": r"docker-ce.*x86_64\.rpm$",
+    },
+    "slack": {
+        "endpoint": "html",
+        "url": "https://slack.com/downloads/instructions/linux?ddl=1&build=rpm",
+        "regex_selector": r"slack.*\.rpm$",
     },
     "skype": {
         "endpoint": "url",
@@ -107,6 +119,17 @@ def parse_args():
         "--json_selector",
         help="JSON Selector. For syntax see https://github.com/h2non/jsonpath-ng?tab=readme-ov-file#",
         type=str,
+    )
+
+    html_parser_help = "URL to HTML page that contains download links for the RPM file"
+    html_parser = subparsers.add_parser("html", help=html_parser_help)
+    html_parser.add_argument("url", help=html_parser_help, type=str)
+    html_parser.add_argument(
+        "-r",
+        "--regex_selector",
+        help=r"Regex Selector. The first link that searches the given regex will be chosen. Example: '^docker-ce.*x86_64\.rpm$'",
+        type=str,
+        default=r"\.rpm$",
     )
 
     preset_parser = subparsers.add_parser("preset", help="Choose from a given preset")
@@ -179,6 +202,24 @@ def get_json_release(json_url, json_selector):
     return url, fname
 
 
+def get_html_release(url, regex_selector):
+    resp = requests.get(url)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.content, "html.parser")
+
+    pattern = re.compile(regex_selector)
+
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        if pattern.search(href):
+            url = url.rsplit("/", 1)[0] + "/" + href
+            fname = href.split("/")[-1]
+            return url, fname
+
+    print(f"Could not locate {regex_selector=} in HTML page.")
+    sys.exit(1)
+
+
 def download_file(url, path):
     print(f"Downloading {url} to {path}")
     resp = requests.get(url)
@@ -191,12 +232,12 @@ def infer_package_name_version_from_url(url):
     try:
         inferred_package = rpm.package(url.split("/")[-1])
         return inferred_package.name, inferred_package.version
-    except IndexError:
+    except (IndexError, rpm.RpmError):
         return None, None
 
 
 def infer_package_name_version_from_first_kb(url):
-    temp_path = Path(tempfile.gettempdir()) / Path(url).name.with_suffix(".tmp")
+    temp_path = Path(tempfile.gettempdir()) / Path(Path(url).name).with_suffix(".tmp")
     with open(temp_path, "wb") as temp_file:
         temp_file.write(requests.get(url, headers={"Range": "bytes=0-1024"}).content)
 
@@ -242,6 +283,8 @@ def main():
         resp = requests.head(args.url, allow_redirects=True)
         url = resp.url
         fname = url.split("/")[-1]
+    elif endpoint == "html":
+        url, fname = get_html_release(args.url, args.regex_selector)
     else:
         print("Unknown endpoint type.")
         sys.exit(1)
@@ -252,7 +295,7 @@ def main():
 
     if package_name:
         installed_versions = subprocess.run(
-            f"rpm -q {package_name}",
+            f"rpm -q {package_name} --queryformat '%{{VERSION}}'",
             shell=True,
             capture_output=True,
             text=True,
