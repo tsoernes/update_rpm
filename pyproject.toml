@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "update-rpm"
+version = "0.1.0"
+description = ""
+authors = ["Torstein Sørnes <t.soernes@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+beautifulsoup4 = "^4.12.3"
+jsonpath-ng = "^1.6.1"
+version-utils = "^0.3.2"
+requests = "^2.32.3"
+packaging = "^24.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
