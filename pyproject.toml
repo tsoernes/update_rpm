@@ -17,3 +17,6 @@ packaging = "^24.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+update_rpm = "update_rpm.update_rpm:main"
