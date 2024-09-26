@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "update-rpm"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Torstein Sørnes <t.soernes@gmail.com>"]
 license = "MIT"
