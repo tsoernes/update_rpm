@@ -4,6 +4,11 @@ version = "0.1.1"
 description = ""
 authors = ["Torstein Sørnes <t.soernes@gmail.com>"]
 license = "MIT"
+readme = "README.md"
+
+[project.urls]
+"Homepage" = "https://github.com/tsoernes/update_rpm"
+"Bug Reports" = "https://github.com/tsoernes/update_rpm/issues"
 
 [tool.poetry.dependencies]
 python = "^3.10"
