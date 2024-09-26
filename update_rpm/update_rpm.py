@@ -4,13 +4,13 @@ Script to install or update an RPM package from a link
 """
 
 import argparse
+import pprint
 import re
 import shlex
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from pprint import pprint
 
 import requests
 from bs4 import BeautifulSoup
@@ -134,7 +134,10 @@ def parse_args():
 
     preset_parser = subparsers.add_parser("preset", help="Choose from a given preset")
     preset_parser.add_argument(
-        "preset", help=str(presets), choices=presets.keys(), type=str
+        "preset",
+        help="\n" + str(pprint.pformat(presets)),
+        choices=presets.keys(),
+        type=str,
     )
 
     parser.add_argument(
@@ -194,7 +197,7 @@ def get_json_release(json_url, json_selector):
         url = next(match.value for match in jsonpath_expr.find(js))
     except StopIteration:
         print(f"Could not locate {json_selector=} in")
-        pprint(js)
+        pprint.pprint(js)
         sys.exit(1)
 
     fname = url.split("/")[-1]
@@ -216,7 +219,7 @@ def get_html_release(url, regex_selector):
             fname = href.split("/")[-1]
             return url, fname
 
-    print(f"Could not locate {regex_selector=} in HTML page.")
+    print(f"Could not locate a link containing {regex_selector=} in HTML page.")
     sys.exit(1)
 
 
@@ -228,7 +231,12 @@ def download_file(url, path):
         fil.write(resp.content)
 
 
-def infer_package_name_version_from_url(url):
+def infer_package_name_version_from_url(
+    url: str,
+) -> tuple[str, str] | tuple[None, None]:
+    """
+    Infer package name and package version by the file name in the URL
+    """
     try:
         inferred_package = rpm.package(url.split("/")[-1])
         return inferred_package.name, inferred_package.version
@@ -236,7 +244,12 @@ def infer_package_name_version_from_url(url):
         return None, None
 
 
-def infer_package_name_version_from_first_kb(url):
+def infer_package_name_version_from_first_kb(
+    url: str,
+) -> tuple[str, str] | tuple[None, None]:
+    """
+    Infer package name and package version by downloading the first kB from an URL and inspecting the header of the RPM file with the `rpm` command
+    """
     temp_path = Path(tempfile.gettempdir()) / Path(Path(url).name).with_suffix(".tmp")
     with open(temp_path, "wb") as temp_file:
         temp_file.write(requests.get(url, headers={"Range": "bytes=0-1024"}).content)
@@ -286,14 +299,14 @@ def main():
     elif endpoint == "html":
         url, fname = get_html_release(args.url, args.regex_selector)
     else:
-        print("Unknown endpoint type.")
+        print(f"Unknown endpoint type. Choose from {endpoints + ["preset"]}")
         sys.exit(1)
 
     package_name, rpm_version = infer_package_name_version_from_url(url)
     if not package_name:
         package_name, rpm_version = infer_package_name_version_from_first_kb(url)
 
-    if package_name:
+    if package_name and rpm_version is not None:
         installed_versions = subprocess.run(
             f"rpm -q {package_name} --queryformat '%{{VERSION}}'",
             shell=True,
