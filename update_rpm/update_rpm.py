@@ -18,6 +18,19 @@ from jsonpath_ng.ext import parse
 from packaging.version import Version
 from version_utils import rpm
 
+def get_fedora_version():
+    version = ""
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("VERSION_ID"):
+                    version = line.strip().split("=")[1].strip('"')
+                    break
+    except FileNotFoundError:
+        version = "Unknown"
+    return version
+
+FEDORA_VER = get_fedora_version()
 endpoints = ["url", "json", "github", "html"]
 
 presets = {
@@ -38,7 +51,7 @@ presets = {
     },
     "microsoft-repo": {
         "endpoint": "url",
-        "url": "https://packages.microsoft.com/config/fedora/40/packages-microsoft-prod.rpm",
+        "url": f"https://packages.microsoft.com/config/fedora/{FEDORA_VER}/packages-microsoft-prod.rpm",
     },
     "azuredatastudio": {
         "endpoint": "url",
@@ -58,7 +71,7 @@ presets = {
     },
     "docker": {
         "endpoint": "html",
-        "url": "https://download.docker.com/linux/fedora/41/x86_64/stable/Packages/",
+        "url": f"https://download.docker.com/linux/fedora/{FEDORA_VER}/x86_64/stable/Packages/",
         "regex_selector": r"docker-ce.*x86_64\.rpm$",
     },
     "slack": {
@@ -299,7 +312,7 @@ def main():
     elif endpoint == "html":
         url, fname = get_html_release(args.url, args.regex_selector)
     else:
-        print(f"Unknown endpoint type. Choose from {endpoints + ["preset"]}")
+        print(f"Unknown endpoint type. Choose from {endpoints}")
         sys.exit(1)
 
     package_name, rpm_version = infer_package_name_version_from_url(url)
